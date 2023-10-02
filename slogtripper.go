@@ -62,6 +62,18 @@ func CaptureResponseBody() Option {
 	}
 }
 
+func CaptureRequestHeaders() Option {
+	return func(st *SlogTripper) {
+		st.captureRequestHeaders = true
+	}
+}
+
+func CaptureResponseHeaders() Option {
+	return func(st *SlogTripper) {
+		st.captureResponseHeaders = true
+	}
+}
+
 type SlogTripper struct {
 	logger     *slog.Logger
 	logAtLevel slog.Level
@@ -70,6 +82,9 @@ type SlogTripper struct {
 
 	captureRequestBody  bool
 	captureResponseBody bool
+
+	captureRequestHeaders  bool
+	captureResponseHeaders bool
 }
 
 func NewSlogTripper(opts ...Option) *SlogTripper {
@@ -118,6 +133,19 @@ func (st *SlogTripper) RoundTrip(req *http.Request) (*http.Response, error) {
 
 			req.Body = io.NopCloser(b)
 		}
+
+		if st.captureRequestHeaders && req.Header != nil {
+			headers := []any{}
+
+			for name := range req.Header {
+				// We don't use value here as value would be a []string and I can't be bothered to check len, pick the one .Get would use and use it
+				headers = append(headers, slog.String(name, req.Header.Get(name)))
+			}
+
+			if len(headers) != 0 {
+				requestGroup = append(requestGroup, slog.Group("headers", headers...))
+			}
+		}
 	}
 
 	res, err := st.proxyTransport.RoundTrip(req)
@@ -148,6 +176,19 @@ func (st *SlogTripper) RoundTrip(req *http.Request) (*http.Response, error) {
 			responseGroup = append(responseGroup, slog.Any("body_content", b.String()))
 
 			res.Body = io.NopCloser(b)
+		}
+
+		if st.captureResponseHeaders && res.Header != nil {
+			headers := []any{}
+
+			for name := range res.Header {
+				// We don't use value here as value would be a []string and I can't be bothered to check len, pick the one .Get would use and use it
+				headers = append(headers, slog.String(name, req.Header.Get(name)))
+			}
+
+			if len(headers) != 0 {
+				responseGroup = append(responseGroup, slog.Group("headers", headers...))
+			}
 		}
 	}
 

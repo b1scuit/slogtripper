@@ -6,6 +6,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"os"
 	"reflect"
 	"strings"
@@ -40,6 +41,20 @@ var scenarios = []*Scenario{
 	{
 		Name: "Basic GET: /",
 		Req:  Must(http.NewRequest(http.MethodGet, "http://localhost/", nil)),
+		Res: &http.Response{
+			Body:       io.NopCloser(strings.NewReader(`{"gday":"back"}`)),
+			StatusCode: http.StatusOK,
+		},
+		Err: nil,
+	},
+	{
+		Name: "Basic GET: / with headers",
+		Req: &http.Request{
+			URL: Must(url.Parse("http://localhst")),
+			Header: http.Header{
+				"example": []string{"value"},
+			},
+		},
 		Res: &http.Response{
 			Body:       io.NopCloser(strings.NewReader(`{"gday":"back"}`)),
 			StatusCode: http.StatusOK,
@@ -115,6 +130,8 @@ func TestExampleScenarios(t *testing.T) {
 				WithRoundTripper(mrt),
 				CaptureRequestBody(),
 				CaptureResponseBody(),
+				CaptureRequestHeaders(),
+				CaptureResponseHeaders(),
 			)
 
 			// Run
@@ -136,7 +153,7 @@ func TestUnmarshalResponse(t *testing.T) {
 		MockRoundTrip: func(r *http.Request) (*http.Response, error) {
 			return &http.Response{
 				Header: http.Header{
-					"Content-Type": []string{"application/json"},
+					"Example-Header": []string{"value"},
 				},
 				StatusCode: http.StatusOK,
 				Body:       io.NopCloser(strings.NewReader(`{"ping": "pong"}`)),
@@ -151,9 +168,16 @@ func TestUnmarshalResponse(t *testing.T) {
 		WithRoundTripper(mrt),
 		CaptureRequestBody(),
 		CaptureResponseBody(),
+		CaptureRequestHeaders(),
+		CaptureResponseHeaders(),
 	)
 
-	res, err := st.RoundTrip(Must(http.NewRequest(http.MethodGet, "http://localhost", nil)))
+	res, err := st.RoundTrip(&http.Request{
+		URL: Must(url.Parse("http://localhost")),
+		Header: http.Header{
+			"Example-Header": []string{"value"},
+		},
+	})
 
 	if err != nil {
 		t.Errorf("Error returned: %v", err)

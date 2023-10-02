@@ -6,6 +6,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"os"
 	"reflect"
 	"strings"
 	"testing"
@@ -134,13 +135,19 @@ func TestUnmarshalResponse(t *testing.T) {
 	mrt := &MockRoundTripper{
 		MockRoundTrip: func(r *http.Request) (*http.Response, error) {
 			return &http.Response{
+				Header: http.Header{
+					"Content-Type": []string{"application/json"},
+				},
 				StatusCode: http.StatusOK,
 				Body:       io.NopCloser(strings.NewReader(`{"ping": "pong"}`)),
 			}, nil
 		},
 	}
 
+	jsonLogger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{}))
+
 	st := NewSlogTripper(
+		WithLogger(jsonLogger),
 		WithRoundTripper(mrt),
 		CaptureRequestBody(),
 		CaptureResponseBody(),

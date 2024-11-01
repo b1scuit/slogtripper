@@ -1,6 +1,7 @@
 package slogtripper
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"io"
@@ -145,6 +146,61 @@ func TestExampleScenarios(t *testing.T) {
 			// Compare res
 			_ = res
 		})
+	}
+}
+
+func TestDefaultLoggerChangeAfterInit(t *testing.T) {
+	req := Must(http.NewRequest(http.MethodGet, "http://localhost/", nil))
+	res := &http.Response{
+		Body:       io.NopCloser(strings.NewReader(`{"gday":"back"}`)),
+		StatusCode: http.StatusOK,
+	}
+
+	// Set up our mock transport to return our expected response
+	mrt := &MockRoundTripper{
+		MockRoundTrip: func(r *http.Request) (*http.Response, error) {
+			return res, nil
+		},
+	}
+
+	originalDefault := slog.Default()
+	defer slog.SetDefault(originalDefault)
+
+	var firstOutput bytes.Buffer
+	slog.SetDefault(slog.New(slog.NewJSONHandler(&firstOutput, &slog.HandlerOptions{
+		Level: slog.LevelInfo,
+	})))
+
+	// Create a SlogTripper without an explicit logger
+	st := NewSlogTripper(
+		WithLoggingLevel(slog.LevelDebug),
+		WithRoundTripper(mrt),
+		CaptureRequestBody(),
+		CaptureResponseBody(),
+		CaptureRequestHeaders(),
+		CaptureResponseHeaders(),
+	)
+
+	// Run the request with the default logger set to INFO
+	_, _ = st.RoundTrip(req)
+
+	// expect no log printed
+	expectedLogMessage := "\"msg\":\"HTTP Request\""
+	if strings.Contains(firstOutput.String(), expectedLogMessage) {
+		t.Errorf("Log contains message when should not: %s", firstOutput.String())
+	}
+
+	// Run the request again with the default logger updated to DEBUG without updating the SlogTripper instance
+	var secondOutput bytes.Buffer
+	slog.SetDefault(slog.New(slog.NewJSONHandler(&secondOutput, &slog.HandlerOptions{
+		Level: slog.LevelDebug,
+	})))
+
+	_, _ = st.RoundTrip(req)
+
+	// expect log printed
+	if !strings.Contains(secondOutput.String(), expectedLogMessage) {
+		t.Errorf("Log does not contain expected message: %s", secondOutput.String())
 	}
 }
 

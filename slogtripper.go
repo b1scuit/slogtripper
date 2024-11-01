@@ -89,7 +89,7 @@ type SlogTripper struct {
 
 func NewSlogTripper(opts ...Option) *SlogTripper {
 	st := &SlogTripper{
-		logger:         slog.Default(),
+		logger:         nil,
 		logAtLevel:     slog.LevelInfo,
 		proxyTransport: http.DefaultTransport,
 	}
@@ -198,10 +198,15 @@ func (st *SlogTripper) RoundTrip(req *http.Request) (*http.Response, error) {
 }
 
 func (st *SlogTripper) log(ctx context.Context, msg string, args ...any) {
+	logger := st.logger
+	if logger == nil {
+		logger = slog.Default()
+	}
+
 	switch st.logAtLevel {
 	case slog.LevelDebug:
-		st.logger.DebugContext(ctx, msg, args...)
+		logger.DebugContext(ctx, msg, args...)
 	case slog.LevelInfo:
-		st.logger.InfoContext(ctx, msg, args...)
+		logger.InfoContext(ctx, msg, args...)
 	}
 }
